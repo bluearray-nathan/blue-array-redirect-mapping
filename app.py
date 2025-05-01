@@ -1,3 +1,5 @@
+# app.py
+
 # requirements.txt content:
 # streamlit
 # pandas
@@ -8,6 +10,7 @@
 # sentence-transformers
 # chardet
 # xlsxwriter
+# faiss-cpu>=1.7.3
 
 import base64
 import chardet
@@ -175,8 +178,19 @@ def select_columns_for_matching(df_live, df_staging):
 # ------------------------------------------
 def setup_matching_model(name):
     if name == 'Embeddings':
-        embedder = Embeddings(SentenceTransformer('all-MiniLM-L6-v2'))
-        return PolyFuzz(embedder)
+        try:
+            # 1. Load the transformer
+            transformer = SentenceTransformer('all-MiniLM-L6-v2')
+            # 2. Wrap it in PolyFuzz’s Embeddings backend (requires FAISS)
+            embedder = Embeddings(transformer)
+            return PolyFuzz(embedder)
+        except ModuleNotFoundError:
+            st.error(
+                "⚠️ Embeddings support requires FAISS, which isn’t installed.\n\n"
+                "Please add `faiss-cpu` (or `faiss-gpu`) to requirements.txt and redeploy."
+            )
+            st.stop()
+    # Fallback for TF-IDF or if embeddings setup failed
     return PolyFuzz(TFIDF(min_similarity=0))
 
 def match_data(df_live, df_staging, cols, model_name):
@@ -294,4 +308,5 @@ def main():
 
 if __name__ == '__main__':
     main()
+
 
