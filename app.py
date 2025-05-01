@@ -1,6 +1,6 @@
 # app.py
 
-# requirements.txt should now be:
+# requirements.txt should include:
 # streamlit
 # pandas
 # numpy
@@ -8,7 +8,6 @@
 # plotly
 # polyfuzz
 # chardet
-# xlsxwriter
 
 import base64
 import chardet
@@ -18,9 +17,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from polyfuzz import PolyFuzz
 from polyfuzz.models import TFIDF
-import xlsxwriter
 
-# Blue Array Migration Mapper | Styled for Blue Array Branding | 1st May 2025
+# Blue Array Redirect Mapping Tool | Styled for Blue Array Branding | 1st May 2025
 
 # ------------------------------------------
 # Custom CSS Injection for Blue Array Branding
@@ -31,14 +29,12 @@ def inject_custom_css():
         <style>
         /* Hide default Streamlit elements */
         #MainMenu, footer, header {visibility: hidden;}
-
         /* Page background and text */
         .stApp {
             background-color: #ffffff;
             color: #002f6c;
             font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
         }
-
         /* Buttons */
         .stButton>button {
             background-color: #002f6c;
@@ -50,7 +46,6 @@ def inject_custom_css():
         .stButton>button:hover {
             background-color: #01447E;
         }
-
         /* File uploader */
         .stFileUploader>div {
             border: 2px dashed #f48024;
@@ -58,7 +53,6 @@ def inject_custom_css():
             padding: 20px;
             background-color: #f9f9f9;
         }
-
         /* Sidebar styling */
         .css-1v0mbdj.e1fqkh3o3 {
             font-size: 22px;
@@ -68,7 +62,6 @@ def inject_custom_css():
         .sidebar .sidebar-content {
             background-color: #f0f4f8;
         }
-
         /* Expander */
         .streamlit-expanderHeader {
             font-weight: bold;
@@ -77,7 +70,6 @@ def inject_custom_css():
         .streamlit-expanderContent {
             background-color: #fcfcfc;
         }
-
         /* Dataframe header */
         .stDataFrame thead tr th {
             background-color: #002f6c;
@@ -92,7 +84,7 @@ def inject_custom_css():
 # ------------------------------------------
 def setup_streamlit_interface():
     st.set_page_config(
-        page_title="Blue Array Migration Mapper",
+        page_title="Blue Array Redirect Mapping Tool",
         layout="wide",
         initial_sidebar_state="expanded"
     )
@@ -100,11 +92,11 @@ def setup_streamlit_interface():
 
     # Main title
     st.markdown(
-        "<h1 style='color:#002f6c; text-align:center; margin-bottom:5px;'>Blue Array Website Migration Mapper</h1>",
+        "<h1 style='color:#002f6c; text-align:center; margin-bottom:5px;'>Blue Array Redirect Mapping Tool</h1>",
         unsafe_allow_html=True
     )
     st.markdown(
-        "<h4 style='color:#f48024; text-align:center; margin-top:0;'>Effortlessly map your live & staging URLs</h4>",
+        "<h4 style='color:#f48024; text-align:center; margin-top:0;'>Effortlessly map your live & staging URLs to Blue Array Redirect Mapping Tool</h4>",
         unsafe_allow_html=True
     )
 
@@ -114,11 +106,11 @@ def setup_streamlit_interface():
         st.markdown(
             """
             1. Crawl Live & Staging with Screaming Frog.  
-            2. Export as CSV/XLSX.  
+            2. Export as CSV.  
             3. Upload files below.  
             4. Use TF-IDF matching (only supported model).  
             5. Adjust confidence threshold slider if desired.  
-            6. Click Map redirects and download the report.
+            6. Click Map redirects and download the CSV report.
             """
         )
         st.markdown("---")
@@ -130,12 +122,12 @@ def setup_streamlit_interface():
 # ------------------------------------------
 # File Upload & Validation
 # ------------------------------------------
-def create_file_uploader_widget(label, types):
-    return st.file_uploader(label, type=types)
+def create_file_uploader_widget(label):
+    return st.file_uploader(label, type=['csv'])
 
 def validate_uploaded(file1, file2):
     if not file1 or not file2 or file1.getvalue() == file2.getvalue():
-        st.warning("🚨 Please upload two distinct, non-empty files.")
+        st.warning("🚨 Please upload two distinct, non-empty CSV files.")
         return False
     return True
 
@@ -143,10 +135,8 @@ def validate_uploaded(file1, file2):
 # File Reading & Preprocessing
 # ------------------------------------------
 def read_file(file):
-    if file.name.lower().endswith('.csv'):
-        enc = chardet.detect(file.getvalue())['encoding']
-        return pd.read_csv(file, dtype="str", encoding=enc, on_bad_lines='skip')
-    return pd.read_excel(file, dtype="str")
+    enc = chardet.detect(file.getvalue())['encoding']
+    return pd.read_csv(file, dtype="str", encoding=enc, on_bad_lines='skip')
 
 def preprocess_df(df):
     return df.apply(lambda c: c.str.lower() if c.dtype == 'object' else c)
@@ -168,17 +158,14 @@ def select_columns_for_matching(df_live, df_staging):
 # Matching Logic (TF-IDF only)
 # ------------------------------------------
 def setup_matching_model(name):
-    # name is always "TF-IDF" in this version
     return PolyFuzz(TFIDF(min_similarity=0))
 
 def match_data(df_live, df_staging, cols, model_name):
     model = setup_matching_model(model_name)
     matches = {}
     for col in cols:
-        # Convert pandas Series to Python lists of strings
         from_list = df_live[col].fillna('').astype(str).tolist()
         to_list   = df_staging[col].fillna('').astype(str).tolist()
-
         model.match(from_list, to_list)
         matches[col] = model.get_matches()
     return matches
@@ -191,10 +178,7 @@ def find_best_matches(df_live, df_staging, matches, cols):
             mdf = matches[col]
             m = mdf[mdf['From'] == row[col]]
             if not m.empty and m.iloc[0]['Similarity'] > best['Score']:
-                best.update({
-                    'Match': m.iloc[0]['To'],
-                    'Score': m.iloc[0]['Similarity']
-                })
+                best.update({'Match': m.iloc[0]['To'], 'Score': m.iloc[0]['Similarity']})
         rows.append(best)
     return pd.DataFrame(rows)
 
@@ -212,49 +196,19 @@ def plot_score_histogram(df):
     st.pyplot(plt)
 
 # ------------------------------------------
-# Excel Export
-# ------------------------------------------
-def create_excel(df, filename='mapping.xlsx'):
-    score_df = pd.DataFrame({
-        'Bracket': pd.cut(df['Score']*100, bins=range(0,110,10), right=False)
-                         .value_counts().sort_index().index.astype(str),
-        'Count': pd.cut(df['Score']*100, bins=range(0,110,10), right=False)
-                       .value_counts().sort_index().values
-    })
-    writer = pd.ExcelWriter(filename, engine='xlsxwriter')
-    df.to_excel(writer, sheet_name='Matches', index=False)
-    score_df.to_excel(writer, sheet_name='Distribution', index=False)
-    wb = writer.book
-    ws = writer.sheets['Matches']
-    fmt = wb.add_format({'num_format':'0.00%', 'align':'center'})
-    ws.set_column('C:C', 12, fmt)
-    ws2 = writer.sheets['Distribution']
-    chart = wb.add_chart({'type':'column'})
-    chart.add_series({
-        'categories': f"=Distribution!$A$2:$A${len(score_df)+1}",
-        'values': f"=Distribution!$B$2:$B${len(score_df)+1}",
-        'fill': {'color': '#f48024'}
-    })
-    chart.set_title({'name':'Score Distribution'})
-    ws2.insert_chart('D2', chart)
-    writer.save()
-    return filename
-
-# ------------------------------------------
 # Main
 # ------------------------------------------
 def main():
     model_name = setup_streamlit_interface()
 
-    # Confidence threshold slider
     threshold_pct = st.slider("Confidence threshold (%)", 0, 100, 80)
     threshold = threshold_pct / 100.0
 
     col1, col2 = st.columns(2)
     with col1:
-        live_file = create_file_uploader_widget("Redirect data", ['csv','xlsx','xls'])
+        live_file = create_file_uploader_widget("Redirect data")
     with col2:
-        stag_file = create_file_uploader_widget("Redirect to data", ['csv','xlsx','xls'])
+        stag_file = create_file_uploader_widget("Redirect to data")
 
     if live_file and stag_file and validate_uploaded(live_file, stag_file):
         df_live = preprocess_df(read_file(live_file))
@@ -275,17 +229,19 @@ def main():
 
             plot_score_histogram(df_best)
 
-            filename = create_excel(df_best)
-            with open(filename, 'rb') as f:
-                b64 = base64.b64encode(f.read()).decode()
+            # Download CSV only
+            csv_data = df_best.to_csv(index=False)
+            b64_csv = base64.b64encode(csv_data.encode()).decode()
             st.markdown(
-                f"<a href='data:application/octet-stream;base64,{b64}' download='{filename}'>💾 Download {filename}</a>",
+                f"<a href='data:text/csv;base64,{b64_csv}' download='mapping.csv'>💾 Download CSV (mapping.csv)</a>",
                 unsafe_allow_html=True
             )
+
             st.balloons()
 
 if __name__ == '__main__':
     main()
+
 
 
 
