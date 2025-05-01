@@ -1,16 +1,14 @@
 # app.py
 
-# requirements.txt content:
+# requirements.txt should now be:
 # streamlit
 # pandas
 # numpy
 # matplotlib
 # plotly
 # polyfuzz
-# sentence-transformers
 # chardet
 # xlsxwriter
-# faiss-cpu>=1.7.3
 
 import base64
 import chardet
@@ -19,9 +17,7 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 from polyfuzz import PolyFuzz
-from polyfuzz.models import TFIDF, Embeddings
-from sentence_transformers import SentenceTransformer
-import plotly.graph_objects as go
+from polyfuzz.models import TFIDF
 import xlsxwriter
 
 # Blue Array Migration Mapper | Styled for Blue Array Branding | 1st May 2025
@@ -120,21 +116,16 @@ def setup_streamlit_interface():
             1. Crawl Live & Staging with Screaming Frog.  
             2. Export as CSV/XLSX.  
             3. Upload files below.  
-            4. Select TF-IDF or Embeddings model.  
+            4. Use TF-IDF matching (only supported model).  
             5. Adjust confidence threshold slider if desired.  
             6. Click Map redirects and download the report.
             """
         )
         st.markdown("---")
         st.markdown("## Matching Model")
-        model_options = ['TF-IDF', 'Embeddings']
-        selected_model = st.selectbox("Choose model", model_options)
-        descriptions = {
-            'TF-IDF': "Comprehensive keyword overlap via TF-IDF.",
-            'Embeddings': "Semantic matching using Sentence-Transformers."
-        }
-        st.write(f"**{selected_model}:** {descriptions[selected_model]}")
-    return selected_model
+        st.markdown("**TF-IDF: Comprehensive keyword overlap via TF-IDF.**")
+
+    return "TF-IDF"
 
 # ------------------------------------------
 # File Upload & Validation
@@ -174,23 +165,10 @@ def select_columns_for_matching(df_live, df_staging):
     return addr, selected
 
 # ------------------------------------------
-# Matching Logic
+# Matching Logic (TF-IDF only)
 # ------------------------------------------
 def setup_matching_model(name):
-    if name == 'Embeddings':
-        try:
-            # 1. Load the transformer
-            transformer = SentenceTransformer('all-MiniLM-L6-v2')
-            # 2. Wrap it in PolyFuzz’s Embeddings backend (requires FAISS)
-            embedder = Embeddings(transformer)
-            return PolyFuzz(embedder)
-        except ModuleNotFoundError:
-            st.error(
-                "⚠️ Embeddings support requires FAISS, which isn’t installed.\n\n"
-                "Please add `faiss-cpu` (or `faiss-gpu`) to requirements.txt and redeploy."
-            )
-            st.stop()
-    # Fallback for TF-IDF or if embeddings setup failed
+    # name is always "TF-IDF" in this version
     return PolyFuzz(TFIDF(min_similarity=0))
 
 def match_data(df_live, df_staging, cols, model_name):
@@ -308,5 +286,6 @@ def main():
 
 if __name__ == '__main__':
     main()
+
 
 
