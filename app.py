@@ -10,10 +10,8 @@
 
 import base64
 import chardet
-import numpy as np
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
 from polyfuzz import PolyFuzz
 from polyfuzz.models import TFIDF
 
@@ -153,13 +151,12 @@ def setup_streamlit_interface():
             - **Select Your Columns**  
               
               **Primary URL Column:** choose `Address` (or whichever column contains your canonical URL).  
-              **Additional Columns (up to 2):** pick among `H1-1`, `Meta Description`, `Title 1`, etc., **in alphabetical order**, to refine matching.  
-              These fields will be used to compute similarity scores.
+              **Additional Columns (up to 2):** pick among `H1-1`, `Meta Description`, `Title 1`, etc., **in alphabetical order**, to refine matching.
 
             - **Adjust Confidence Threshold**  
               
-              Use the slider (0–100%) to highlight any mappings below your chosen confidence level.  
-              Default is 80%; lower if you want a broader match set, raise if you need stricter one-to-one mappings.
+              Use the slider (0–100%) to highlight mappings below your chosen confidence level.  
+              Default is 80%.
 
             - **Process & Review**  
               
@@ -168,8 +165,6 @@ def setup_streamlit_interface():
               - **Source** = your live URL  
               - **Match** = suggested staging URL  
               - **Score** = similarity (0–1)
-
-              Rows below your threshold will be shaded red for easy spotting of low confidence matches.
             """
         )
         st.markdown("---")
@@ -201,19 +196,16 @@ def preprocess_df(df):
     return df.apply(lambda c: c.str.lower() if c.dtype == 'object' else c)
 
 # ------------------------------------------
-# Column Selection
+# Column Selection (alphabetical)
 # ------------------------------------------
 def select_columns_for_matching(df_live, df_staging):
-    # Alphabetical ordering of shared columns
     common = sorted(set(df_live.columns) & set(df_staging.columns))
     st.markdown("### Select Columns for Matching")
 
-    # Default primary URL column
     address_defaults = ['address', 'url', 'link']
     default_addr = next((c for c in common if c.lower() in address_defaults), common[0])
     addr = st.selectbox("Primary URL Column", common, index=common.index(default_addr))
 
-    # Additional columns list in alphabetical order
     additional = [c for c in common if c != addr]
     selected = st.multiselect("Additional Columns (max 2)", additional, max_selections=2)
 
@@ -230,7 +222,7 @@ def match_data(df_live, df_staging, cols, model_name):
     matches = {}
     for col in cols:
         from_list = df_live[col].fillna('').astype(str).tolist()
-        to_list   = df_staging[col].fillna('').astype(str).tolist()
+        to_list = df_staging[col].fillna('').astype(str).tolist()
         model.match(from_list, to_list)
         matches[col] = model.get_matches()
     return matches
@@ -248,27 +240,17 @@ def find_best_matches(df_live, df_staging, matches, cols):
     return pd.DataFrame(rows)
 
 # ------------------------------------------
-# Visualization
-# ------------------------------------------
-def plot_score_histogram(df):
-    df['ScorePct'] = df['Score'] * 100
-    brackets = pd.cut(df['ScorePct'], bins=range(0,110,10), right=False)
-    counts = brackets.value_counts().sort_index()
-    plt.figure(figsize=(6,3))
-    ax = counts.plot(kind='bar', width=0.8, edgecolor='#002f6c')
-    ax.set_xlabel('Score Bracket (%)')
-    ax.set_ylabel('Count')
-    st.pyplot(plt)
-
-# ------------------------------------------
 # Main
 # ------------------------------------------
 def main():
     model_name = setup_streamlit_interface()
 
+    # Confidence threshold and checkbox
     threshold_pct = st.slider("Confidence threshold (%)", 0, 100, 80)
     threshold = threshold_pct / 100.0
+    include_low_confidence = st.checkbox("Include URLs below confidence threshold", True)
 
+    # File upload
     col1, col2 = st.columns(2)
     with col1:
         live_file = create_file_uploader_widget("Redirect data")
@@ -285,24 +267,38 @@ def main():
             matches = match_data(df_live, df_stag, cols, model_name)
             df_best = find_best_matches(df_live, df_stag, matches, cols)
 
+            # Mapping Quality Summary
+            avg_score = df_best['Score'].mean()
+            median_score = df_best['Score'].median()
+            pct_above = (df_best['Score'] >= threshold).mean() * 100
+
+            st.markdown("## Mapping Quality Summary")
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Average Confidence", f"{avg_score:.2%}")
+            c2.metric("Median Confidence", f"{median_score:.2%}")
+            c3.metric(f"% ≥ {threshold_pct}%", f"{pct_above:.1f}%")
+
+            # Filter based on checkbox
+            if include_low_confidence:
+                df_display = df_best
+            else:
+                df_display = df_best[df_best['Score'] >= threshold]
+
+            # Top Matches table
             st.markdown(f"### Top Matches (highlighting < {threshold_pct}% confidence)")
-            styled_df = df_best.style.apply(
+            styled_df = df_display.style.apply(
                 lambda row: ['background-color: #fde2e2' if row['Score'] < threshold else '' for _ in row],
                 axis=1
             )
             st.dataframe(styled_df)
 
-            plot_score_histogram(df_best)
-
             # Download CSV only
-            csv_data = df_best.to_csv(index=False)
+            csv_data = df_display.to_csv(index=False)
             b64_csv = base64.b64encode(csv_data.encode()).decode()
             st.markdown(
                 f"<a href='data:text/csv;base64,{b64_csv}' download='mapping.csv'>💾 Download CSV (mapping.csv)</a>",
                 unsafe_allow_html=True
             )
-
-            st.balloons()
 
 if __name__ == '__main__':
     main()
