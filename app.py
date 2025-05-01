@@ -48,7 +48,7 @@ def inject_custom_css():
             background-color: #01447E;
         }
 
-        /* File uploader: only target the dropzone before upload */
+        /* File uploader dropzone before file is added */
         div[data-testid="stFileUploadDropzone"] {
             position: relative;
             border: 2px dashed #f48024;
@@ -56,13 +56,13 @@ def inject_custom_css():
             padding: 20px;
             background-color: #f9f9f9;
         }
-        /* Hide the default placeholder text */
+        /* Hide default placeholder text */
         div[data-testid="stFileUploadDropzone"] > p {
             visibility: hidden !important;
             margin: 0 !important;
             padding: 0 !important;
         }
-        /* Inject our own placeholder inside the dropzone */
+        /* Inject custom placeholder */
         div[data-testid="stFileUploadDropzone"]::before {
             content: "Add your CSV file here";
             position: absolute;
@@ -153,7 +153,7 @@ def setup_streamlit_interface():
             - **Select Your Columns**  
               
               **Primary URL Column:** choose `Address` (or whichever column contains your canonical URL).  
-              **Additional Columns (up to 2):** pick among `Title 1`, `Meta Description`, `H1-1`, etc., to refine matching.  
+              **Additional Columns (up to 2):** pick among `H1-1`, `Meta Description`, `Title 1`, etc., **in alphabetical order**, to refine matching.  
               These fields will be used to compute similarity scores.
 
             - **Adjust Confidence Threshold**  
@@ -165,11 +165,11 @@ def setup_streamlit_interface():
               
               Click **Map redirects**  
               View the **Matches** table:  
-              - **Source** = your Live URL  
-              - **Match** = suggested Staging URL  
+              - **Source** = your live URL  
+              - **Match** = suggested staging URL  
               - **Score** = similarity (0–1)
 
-              Rows below your threshold will be shaded red for easy spotting of low confidence score
+              Rows below your threshold will be shaded red for easy spotting of low confidence matches.
             """
         )
         st.markdown("---")
@@ -204,13 +204,19 @@ def preprocess_df(df):
 # Column Selection
 # ------------------------------------------
 def select_columns_for_matching(df_live, df_staging):
-    common = list(set(df_live.columns) & set(df_staging.columns))
+    # Alphabetical ordering of shared columns
+    common = sorted(set(df_live.columns) & set(df_staging.columns))
     st.markdown("### Select Columns for Matching")
-    address_defaults = ['address','url','link']
+
+    # Default primary URL column
+    address_defaults = ['address', 'url', 'link']
     default_addr = next((c for c in common if c.lower() in address_defaults), common[0])
     addr = st.selectbox("Primary URL Column", common, index=common.index(default_addr))
+
+    # Additional columns list in alphabetical order
     additional = [c for c in common if c != addr]
     selected = st.multiselect("Additional Columns (max 2)", additional, max_selections=2)
+
     return addr, selected
 
 # ------------------------------------------
@@ -300,6 +306,7 @@ def main():
 
 if __name__ == '__main__':
     main()
+
 
 
 
