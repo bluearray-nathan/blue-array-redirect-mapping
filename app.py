@@ -119,7 +119,7 @@ def setup_streamlit_interface():
             3. Upload files below.  
             4. Select TF-IDF or Embeddings model.  
             5. Adjust confidence threshold slider if desired.  
-            6. Click Process and download the report.
+            6. Click Map redirects and download the report.
             """
         )
         st.markdown("---")
@@ -179,15 +179,17 @@ def setup_matching_model(name):
         return PolyFuzz(embedder)
     return PolyFuzz(TFIDF(min_similarity=0))
 
-
 def match_data(df_live, df_staging, cols, model_name):
     model = setup_matching_model(model_name)
     matches = {}
     for col in cols:
-        model.match(df_live[col].fillna(''), df_staging[col].fillna(''))
+        # Convert pandas Series to Python lists of strings
+        from_list = df_live[col].fillna('').astype(str).tolist()
+        to_list   = df_staging[col].fillna('').astype(str).tolist()
+
+        model.match(from_list, to_list)
         matches[col] = model.get_matches()
     return matches
-
 
 def find_best_matches(df_live, df_staging, matches, cols):
     rows = []
@@ -222,8 +224,10 @@ def plot_score_histogram(df):
 # ------------------------------------------
 def create_excel(df, filename='mapping.xlsx'):
     score_df = pd.DataFrame({
-        'Bracket': pd.cut(df['Score']*100, bins=range(0,110,10), right=False).value_counts().sort_index().index.astype(str),
-        'Count': pd.cut(df['Score']*100, bins=range(0,110,10), right=False).value_counts().sort_index().values
+        'Bracket': pd.cut(df['Score']*100, bins=range(0,110,10), right=False)
+                         .value_counts().sort_index().index.astype(str),
+        'Count': pd.cut(df['Score']*100, bins=range(0,110,10), right=False)
+                       .value_counts().sort_index().values
     })
     writer = pd.ExcelWriter(filename, engine='xlsxwriter')
     df.to_excel(writer, sheet_name='Matches', index=False)
@@ -256,9 +260,9 @@ def main():
 
     col1, col2 = st.columns(2)
     with col1:
-        live_file = create_file_uploader_widget("Live Data", ['csv','xlsx','xls'])
+        live_file = create_file_uploader_widget("Redirect data", ['csv','xlsx','xls'])
     with col2:
-        stag_file = create_file_uploader_widget("Staging Data", ['csv','xlsx','xls'])
+        stag_file = create_file_uploader_widget("Redirect to data", ['csv','xlsx','xls'])
 
     if live_file and stag_file and validate_uploaded(live_file, stag_file):
         df_live = preprocess_df(read_file(live_file))
@@ -266,19 +270,17 @@ def main():
         addr_col, add_cols = select_columns_for_matching(df_live, df_stag)
         cols = [addr_col] + add_cols
 
-        if st.button("🚀 Process Files"):
+        if st.button("Map redirects"):
             matches = match_data(df_live, df_stag, cols, model_name)
             df_best = find_best_matches(df_live, df_stag, matches, cols)
 
             st.markdown(f"### Top Matches (highlighting < {threshold_pct}% confidence)")
-            # Style low-confidence rows
             styled_df = df_best.style.apply(
                 lambda row: ['background-color: #fde2e2' if row['Score'] < threshold else '' for _ in row],
                 axis=1
             )
             st.dataframe(styled_df)
 
-            # Histogram
             plot_score_histogram(df_best)
 
             filename = create_excel(df_best)
@@ -292,3 +294,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
