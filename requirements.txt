@@ -7,4 +7,4 @@ polyfuzz
 sentence-transformers
 chardet
 xlsxwriter
-faiss-cpu>=1.7.3
+faiss-cpu==1.7.6
