@@ -48,22 +48,22 @@ def inject_custom_css():
             background-color: #01447E;
         }
 
-        /* File uploader styling & custom placeholder */
-        .stFileUploader > div {
+        /* File uploader: only target the dropzone before upload */
+        div[data-testid="stFileUploadDropzone"] {
             position: relative;
             border: 2px dashed #f48024;
             border-radius: 4px;
             padding: 20px;
             background-color: #f9f9f9;
         }
-        /* Hide default placeholder text */
-        .stFileUploader > div > p {
+        /* Hide the default placeholder text */
+        div[data-testid="stFileUploadDropzone"] > p {
             visibility: hidden !important;
             margin: 0 !important;
             padding: 0 !important;
         }
-        /* Inject our own placeholder */
-        .stFileUploader > div::before {
+        /* Inject our own placeholder inside the dropzone */
+        div[data-testid="stFileUploadDropzone"]::before {
             content: "Add your CSV file here";
             position: absolute;
             top: 50%;
@@ -300,6 +300,7 @@ def main():
 
 if __name__ == '__main__':
     main()
+
 
 
 
