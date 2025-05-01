@@ -56,11 +56,13 @@ def inject_custom_css():
             padding: 20px;
             background-color: #f9f9f9;
         }
+        /* Hide default placeholder text */
         .stFileUploader > div > p {
             visibility: hidden !important;
             margin: 0 !important;
             padding: 0 !important;
         }
+        /* Inject our own placeholder */
         .stFileUploader > div::before {
             content: "Add your CSV file here";
             position: absolute;
@@ -91,7 +93,7 @@ def inject_custom_css():
             background-color: #fcfcfc;
         }
 
-        /* Dataframe header */
+        /* DataFrame header */
         .stDataFrame thead tr th {
             background-color: #002f6c;
             color: #ffffff;
@@ -112,7 +114,7 @@ def setup_streamlit_interface():
     )
     inject_custom_css()
 
-    # Main title only
+    # Main title
     st.markdown(
         "<h1 style='color:#002f6c; text-align:center; margin-bottom:5px;'>Blue Array Redirect Mapping Tool</h1>",
         unsafe_allow_html=True
@@ -222,7 +224,7 @@ def match_data(df_live, df_staging, cols, model_name):
     matches = {}
     for col in cols:
         from_list = df_live[col].fillna('').astype(str).tolist()
-        to_list = df_staging[col].fillna('').astype(str).tolist()
+        to_list   = df_staging[col].fillna('').astype(str).tolist()
         model.match(from_list, to_list)
         matches[col] = model.get_matches()
     return matches
@@ -298,6 +300,7 @@ def main():
 
 if __name__ == '__main__':
     main()
+
 
 
 
