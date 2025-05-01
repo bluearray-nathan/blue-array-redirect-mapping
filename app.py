@@ -5,7 +5,6 @@
 # pandas
 # numpy
 # matplotlib
-# plotly
 # polyfuzz
 # chardet
 
@@ -28,31 +27,51 @@ def inject_custom_css():
         """
         <style>
         /* Hide default Streamlit elements */
-        #MainMenu, footer, header {visibility: hidden;}
+        #MainMenu, footer, header { visibility: hidden; }
+
         /* Page background and text */
         .stApp {
             background-color: #ffffff;
             color: #002f6c;
             font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
         }
+
         /* Buttons */
-        .stButton>button {
+        .stButton > button {
             background-color: #002f6c;
             color: #ffffff;
             border-radius: 4px;
             font-weight: bold;
             padding: 10px 20px;
         }
-        .stButton>button:hover {
+        .stButton > button:hover {
             background-color: #01447E;
         }
-        /* File uploader */
-        .stFileUploader>div {
+
+        /* File uploader styling & custom placeholder */
+        .stFileUploader > div {
+            position: relative;
             border: 2px dashed #f48024;
             border-radius: 4px;
             padding: 20px;
             background-color: #f9f9f9;
         }
+        .stFileUploader > div > p {
+            visibility: hidden !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+        .stFileUploader > div::before {
+            content: "Add your CSV file here";
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #002f6c;
+            font-size: 16px;
+            pointer-events: none;
+        }
+
         /* Sidebar styling */
         .css-1v0mbdj.e1fqkh3o3 {
             font-size: 22px;
@@ -62,6 +81,7 @@ def inject_custom_css():
         .sidebar .sidebar-content {
             background-color: #f0f4f8;
         }
+
         /* Expander */
         .streamlit-expanderHeader {
             font-weight: bold;
@@ -70,13 +90,15 @@ def inject_custom_css():
         .streamlit-expanderContent {
             background-color: #fcfcfc;
         }
+
         /* Dataframe header */
         .stDataFrame thead tr th {
             background-color: #002f6c;
             color: #ffffff;
         }
         </style>
-        """, unsafe_allow_html=True
+        """,
+        unsafe_allow_html=True
     )
 
 # ------------------------------------------
@@ -90,13 +112,9 @@ def setup_streamlit_interface():
     )
     inject_custom_css()
 
-    # Main title
+    # Main title only
     st.markdown(
         "<h1 style='color:#002f6c; text-align:center; margin-bottom:5px;'>Blue Array Redirect Mapping Tool</h1>",
-        unsafe_allow_html=True
-    )
-    st.markdown(
-        "<h4 style='color:#f48024; text-align:center; margin-top:0;'>Effortlessly map your live & staging URLs to Blue Array Redirect Mapping Tool</h4>",
         unsafe_allow_html=True
     )
 
@@ -105,12 +123,51 @@ def setup_streamlit_interface():
         st.markdown("## How to Use")
         st.markdown(
             """
-            1. Crawl Live & Staging with Screaming Frog.  
-            2. Export as CSV.  
-            3. Upload files below.  
-            4. Use TF-IDF matching (only supported model).  
-            5. Adjust confidence threshold slider if desired.  
-            6. Click Map redirects and download the CSV report.
+            - **Crawl both sets of URLs using Screaming Frog**  
+              
+              Crawl the URLs you want to redirect, then repeat for the candidate URLs to redirect to.
+
+            - **Export Your Reports**  
+              
+              Export the **Internal HTML** report as a CSV for both crawls.  
+              Save each export as a distinct file, e.g. `redirect_urls.csv` and `redirect_to_urls.csv`.
+
+            - **Upload Your Files**  
+              
+              Under **Redirect data** upload your `redirect_urls.csv`.  
+              Under **Redirect to data** upload your `redirect_to_urls.csv`.  
+              _Tip: Filenames must differ; the tool will warn you if you accidentally upload the same file twice._
+
+            - **Choose Your Matching Model**  
+              
+              **TF-IDF**  
+              Good for keyword-heavy URL and title matching.  
+              Tends to be faster on large datasets.  
+
+              **Embeddings**  
+              Uses Sentence-Transformers to capture semantic similarity.  
+              Better for pages with similar content but low keyword overlap.
+
+            - **Select Your Columns**  
+              
+              **Primary URL Column:** choose `Address` (or whichever column contains your canonical URL).  
+              **Additional Columns (up to 2):** pick among `Title 1`, `Meta Description`, `H1-1`, etc., to refine matching.  
+              These fields will be used to compute similarity scores.
+
+            - **Adjust Confidence Threshold**  
+              
+              Use the slider (0–100%) to highlight any mappings below your chosen confidence level.  
+              Default is 80%; lower if you want a broader match set, raise if you need stricter one-to-one mappings.
+
+            - **Process & Review**  
+              
+              Click **Map redirects**  
+              View the **Matches** table:  
+              - **Source** = your Live URL  
+              - **Match** = suggested Staging URL  
+              - **Score** = similarity (0–1)
+
+              Rows below your threshold will be shaded red for easy spotting of low confidence score
             """
         )
         st.markdown("---")
@@ -165,7 +222,7 @@ def match_data(df_live, df_staging, cols, model_name):
     matches = {}
     for col in cols:
         from_list = df_live[col].fillna('').astype(str).tolist()
-        to_list   = df_staging[col].fillna('').astype(str).tolist()
+        to_list = df_staging[col].fillna('').astype(str).tolist()
         model.match(from_list, to_list)
         matches[col] = model.get_matches()
     return matches
@@ -241,6 +298,7 @@ def main():
 
 if __name__ == '__main__':
     main()
+
 
 
 
