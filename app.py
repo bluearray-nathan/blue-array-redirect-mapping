@@ -3,8 +3,6 @@
 # requirements.txt should include:
 # streamlit
 # pandas
-# numpy
-# matplotlib
 # polyfuzz
 # chardet
 
@@ -72,6 +70,17 @@ def inject_custom_css():
             pointer-events: none;
         }
 
+        /* Styled Expander for Select Columns section */
+        .streamlit-expanderHeader {
+            font-weight: bold;
+            color: #002f6c;
+        }
+        .streamlit-expanderContent {
+            background-color: #f0f4f8;
+            border-left: 4px solid #002f6c;
+            padding: 12px;
+        }
+
         /* Sidebar styling */
         .css-1v0mbdj.e1fqkh3o3 {
             font-size: 22px;
@@ -80,15 +89,6 @@ def inject_custom_css():
         }
         .sidebar .sidebar-content {
             background-color: #f0f4f8;
-        }
-
-        /* Expander */
-        .streamlit-expanderHeader {
-            font-weight: bold;
-            color: #f48024;
-        }
-        .streamlit-expanderContent {
-            background-color: #fcfcfc;
         }
 
         /* DataFrame header */
@@ -100,6 +100,7 @@ def inject_custom_css():
         """,
         unsafe_allow_html=True
     )
+
 
 # ------------------------------------------
 # Interface Setup
@@ -124,22 +125,18 @@ def setup_streamlit_interface():
         st.markdown(
             """
             - **Crawl both sets of URLs using Screaming Frog**  
-              
               Crawl the URLs you want to redirect, then repeat for the candidate URLs to redirect to.
 
             - **Export Your Reports**  
-              
               Export the **Internal HTML** report as a CSV for both crawls.  
               Save each export as a distinct file, e.g. `redirect_urls.csv` and `redirect_to_urls.csv`.
 
             - **Upload Your Files**  
-              
               Under **Redirect data** upload your `redirect_urls.csv`.  
               Under **Redirect to data** upload your `redirect_to_urls.csv`.  
               _Tip: Filenames must differ; the tool will warn you if you accidentally upload the same file twice._
 
             - **Choose Your Matching Model**  
-              
               **TF-IDF**  
               Good for keyword-heavy URL and title matching.  
               Tends to be faster on large datasets.  
@@ -149,22 +146,15 @@ def setup_streamlit_interface():
               Better for pages with similar content but low keyword overlap.
 
             - **Select Your Columns**  
-              
-              **Primary URL Column:** choose `Address` (or whichever column contains your canonical URL).  
-              **Additional Columns (up to 2):** pick among `H1-1`, `Meta Description`, `Title 1`, etc., **in alphabetical order**, to refine matching.
+              Open the “Select Columns for Matching” panel to choose which fields to match on.
 
             - **Adjust Confidence Threshold**  
-              
               Use the slider (0–100%) to highlight mappings below your chosen confidence level.  
               Default is 80%.
 
             - **Process & Review**  
-              
               Click **Map redirects**  
-              View the **Matches** table:  
-              - **Source** = your live URL  
-              - **Match** = suggested staging URL  
-              - **Score** = similarity (0–1)
+              View the **Matches** table and download your CSV report.
             """
         )
         st.markdown("---")
@@ -173,17 +163,20 @@ def setup_streamlit_interface():
 
     return "TF-IDF"
 
+
 # ------------------------------------------
 # File Upload & Validation
 # ------------------------------------------
 def create_file_uploader_widget(label):
     return st.file_uploader(label, type=['csv'])
 
+
 def validate_uploaded(file1, file2):
     if not file1 or not file2 or file1.getvalue() == file2.getvalue():
         st.warning("🚨 Please upload two distinct, non-empty CSV files.")
         return False
     return True
+
 
 # ------------------------------------------
 # File Reading & Preprocessing
@@ -192,30 +185,47 @@ def read_file(file):
     enc = chardet.detect(file.getvalue())['encoding']
     return pd.read_csv(file, dtype="str", encoding=enc, on_bad_lines='skip')
 
+
 def preprocess_df(df):
     return df.apply(lambda c: c.str.lower() if c.dtype == 'object' else c)
 
+
 # ------------------------------------------
-# Column Selection (alphabetical)
+# Column Selection (alphabetical, styled expander)
 # ------------------------------------------
 def select_columns_for_matching(df_live, df_staging):
     common = sorted(set(df_live.columns) & set(df_staging.columns))
-    st.markdown("### Select Columns for Matching")
-
     address_defaults = ['address', 'url', 'link']
     default_addr = next((c for c in common if c.lower() in address_defaults), common[0])
-    addr = st.selectbox("Primary URL Column", common, index=common.index(default_addr))
 
-    additional = [c for c in common if c != addr]
-    selected = st.multiselect("Additional Columns (max 2)", additional, max_selections=2)
+    with st.expander("Select Columns for Matching", expanded=True):
+        st.markdown(
+            "Use the search box in each dropdown to quickly filter columns.",
+            unsafe_allow_html=True
+        )
+        addr = st.selectbox(
+            "Primary URL Column",
+            common,
+            index=common.index(default_addr),
+            help="Start typing to search columns"
+        )
+        additional = [c for c in common if c != addr]
+        selected = st.multiselect(
+            "Additional Columns (max 2)",
+            additional,
+            max_selections=2,
+            help="Start typing to search columns"
+        )
 
     return addr, selected
+
 
 # ------------------------------------------
 # Matching Logic (TF-IDF only)
 # ------------------------------------------
 def setup_matching_model(name):
     return PolyFuzz(TFIDF(min_similarity=0))
+
 
 def match_data(df_live, df_staging, cols, model_name):
     model = setup_matching_model(model_name)
@@ -227,6 +237,7 @@ def match_data(df_live, df_staging, cols, model_name):
         matches[col] = model.get_matches()
     return matches
 
+
 def find_best_matches(df_live, df_staging, matches, cols):
     rows = []
     for _, row in df_live.iterrows():
@@ -235,9 +246,13 @@ def find_best_matches(df_live, df_staging, matches, cols):
             mdf = matches[col]
             m = mdf[mdf['From'] == row[col]]
             if not m.empty and m.iloc[0]['Similarity'] > best['Score']:
-                best.update({'Match': m.iloc[0]['To'], 'Score': m.iloc[0]['Similarity']})
+                best.update({
+                    'Match': m.iloc[0]['To'],
+                    'Score': m.iloc[0]['Similarity']
+                })
         rows.append(best)
     return pd.DataFrame(rows)
+
 
 # ------------------------------------------
 # Main
@@ -245,22 +260,28 @@ def find_best_matches(df_live, df_staging, matches, cols):
 def main():
     model_name = setup_streamlit_interface()
 
-    # Confidence threshold and checkbox
     threshold_pct = st.slider("Confidence threshold (%)", 0, 100, 80)
     threshold = threshold_pct / 100.0
-    include_low_confidence = st.checkbox("Include URLs below confidence threshold", True)
+    include_low_confidence = st.checkbox(
+        "Include URLs below confidence threshold", True
+    )
 
-    # File upload
     col1, col2 = st.columns(2)
     with col1:
         live_file = create_file_uploader_widget("Redirect data")
     with col2:
         stag_file = create_file_uploader_widget("Redirect to data")
 
-    if live_file and stag_file and validate_uploaded(live_file, stag_file):
+    if (
+        live_file
+        and stag_file
+        and validate_uploaded(live_file, stag_file)
+    ):
         df_live = preprocess_df(read_file(live_file))
         df_stag = preprocess_df(read_file(stag_file))
-        addr_col, add_cols = select_columns_for_matching(df_live, df_stag)
+        addr_col, add_cols = select_columns_for_matching(
+            df_live, df_stag
+        )
         cols = [addr_col] + add_cols
 
         if st.button("Map redirects"):
@@ -279,15 +300,23 @@ def main():
             c3.metric(f"% ≥ {threshold_pct}%", f"{pct_above:.1f}%")
 
             # Filter based on checkbox
-            if include_low_confidence:
-                df_display = df_best
-            else:
-                df_display = df_best[df_best['Score'] >= threshold]
+            df_display = (
+                df_best
+                if include_low_confidence
+                else df_best[df_best['Score'] >= threshold]
+            )
 
             # Top Matches table
-            st.markdown(f"### Top Matches (highlighting < {threshold_pct}% confidence)")
+            st.markdown(
+                f"### Top Matches (highlighting < {threshold_pct}% confidence)"
+            )
             styled_df = df_display.style.apply(
-                lambda row: ['background-color: #fde2e2' if row['Score'] < threshold else '' for _ in row],
+                lambda row: [
+                    'background-color: #fde2e2'
+                    if row['Score'] < threshold
+                    else ''
+                    for _ in row
+                ],
                 axis=1
             )
             st.dataframe(styled_df)
@@ -296,12 +325,15 @@ def main():
             csv_data = df_display.to_csv(index=False)
             b64_csv = base64.b64encode(csv_data.encode()).decode()
             st.markdown(
-                f"<a href='data:text/csv;base64,{b64_csv}' download='mapping.csv'>💾 Download CSV (mapping.csv)</a>",
+                f"<a href='data:text/csv;base64,{b64_csv}' "
+                "download='mapping.csv'>💾 Download CSV (mapping.csv)</a>",
                 unsafe_allow_html=True
             )
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()
+
 
 
 
