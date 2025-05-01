@@ -1,0 +1,9 @@
+streamlit
+pandas
+numpy
+matplotlib
+plotly
+polyfuzz
+sentence-transformers
+chardet
+xlsxwriter
