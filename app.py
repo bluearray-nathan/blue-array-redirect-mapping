@@ -25,78 +25,23 @@ from polyfuzz.models import TFIDF
 def inject_custom_css():
     st.markdown("""
     <style>
-      /* Hide default Streamlit elements */
       #MainMenu, footer, header { visibility: hidden; }
-
-      /* App background and text */
-      .stApp {
-        background-color: #ffffff;
-        color: #002f6c;
-        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-      }
-
-      /* Buttons */
-      .stButton > button {
-        background-color: #002f6c;
-        color: #ffffff;
-        border-radius: 4px;
-        font-weight: bold;
-        padding: 10px 20px;
-      }
-      .stButton > button:hover {
-        background-color: #01447E;
-      }
-
-      /* File uploader dropzone */
+      .stApp { background-color: #ffffff; color: #002f6c; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; }
+      .stButton > button { background-color: #002f6c; color: #ffffff; border-radius: 4px; font-weight: bold; padding: 10px 20px; }
+      .stButton > button:hover { background-color: #01447E; }
       div[data-testid="stFileUploadDropzone"] {
-        position: relative;
-        border: 2px dashed #f48024;
-        border-radius: 4px;
-        padding: 20px;
-        background-color: #f9f9f9;
+        position: relative; border: 2px dashed #f48024; border-radius: 4px; padding: 20px; background-color: #f9f9f9;
       }
-      div[data-testid="stFileUploadDropzone"] > p {
-        visibility: hidden !important;
-        margin: 0;
-        padding: 0;
-      }
+      div[data-testid="stFileUploadDropzone"] > p { visibility: hidden !important; margin: 0; padding: 0; }
       div[data-testid="stFileUploadDropzone"]::before {
-        content: "Add your CSV file here";
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        color: #002f6c;
-        font-size: 16px;
-        pointer-events: none;
+        content: "Add your CSV file here"; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+        color: #002f6c; font-size: 16px; pointer-events: none;
       }
-
-      /* Styled expander for Select Columns */
-      .streamlit-expanderHeader {
-        font-weight: bold;
-        color: #002f6c;
-      }
-      .streamlit-expanderContent {
-        background-color: #f0f4f8;
-        border-left: 4px solid #002f6c;
-        padding: 12px;
-      }
-
-      /* Sidebar styling */
-      .css-1v0mbdj.e1fqkh3o3 {
-        font-size: 22px;
-        color: #002f6c;
-        font-weight: bold;
-      }
-      .sidebar .sidebar-content {
-        background-color: #f0f4f8;
-      }
-
-      /* DataFrame header */
-      .stDataFrame thead tr th {
-        background-color: #002f6c;
-        color: #ffffff;
-      }
+      .streamlit-expanderHeader { font-weight: bold; color: #002f6c; }
+      .streamlit-expanderContent { background-color: #f0f4f8; border-left: 4px solid #002f6c; padding: 12px; }
+      .css-1v0mbdj.e1fqkh3o3 { font-size: 22px; color: #002f6c; font-weight: bold; }
+      .sidebar .sidebar-content { background-color: #f0f4f8; }
+      .stDataFrame thead tr th { background-color: #002f6c; color: #ffffff; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -104,19 +49,14 @@ def inject_custom_css():
 # Interface Setup
 # ------------------------------------------
 def setup_streamlit_interface():
-    st.set_page_config(
-        page_title="Blue Array Redirect Mapping Tool",
-        layout="wide",
-        initial_sidebar_state="expanded"
-    )
+    st.set_page_config(page_title="Blue Array Redirect Mapping Tool",
+                       layout="wide", initial_sidebar_state="expanded")
     inject_custom_css()
-
     st.markdown(
         "<h1 style='color:#002f6c; text-align:center; margin-bottom:10px;'>"
         "Blue Array Redirect Mapping Tool</h1>",
         unsafe_allow_html=True
     )
-
     with st.sidebar:
         st.markdown("## How to Use")
         st.markdown("""
@@ -129,13 +69,11 @@ def setup_streamlit_interface():
         """)
         st.markdown("---")
         st.markdown("## Matching Method")
-
         method = st.selectbox(
             "Choose method",
             ["TF-IDF", "Embeddings"],
             help="TF-IDF: keyword overlap; Embeddings: semantic similarity via OpenAI"
         )
-
         if method == "TF-IDF":
             st.info(
                 "**TF-IDF** is fast, keyword-based matching. "
@@ -152,7 +90,6 @@ def setup_streamlit_interface():
                 type="password",
                 help="Required for OpenAI embeddings"
             )
-
     return method, api_key
 
 # ------------------------------------------
@@ -184,7 +121,6 @@ def select_columns_for_matching(df_live, df_staging):
     common = sorted(set(df_live.columns) & set(df_staging.columns))
     defaults = ['address', 'url', 'link']
     default_addr = next((c for c in common if c.lower() in defaults), common[0])
-
     with st.expander("Select Columns for Matching", expanded=True):
         st.markdown("Use the search box to filter columns quickly.")
         addr = st.selectbox(
@@ -213,7 +149,6 @@ def match_tfidf(df_live, df_staging, cols):
         tl = df_staging[col].fillna('').astype(str).tolist()
         model.match(fl, tl)
         matches[col] = model.get_matches()
-
     primary = cols[0]
     rows = []
     for _, row in df_live.iterrows():
@@ -228,9 +163,9 @@ def match_tfidf(df_live, df_staging, cols):
                 if col == primary:
                     best_match_addr = to_val
                 else:
-                    matched_row = df_staging[df_staging[col] == to_val]
-                    if not matched_row.empty:
-                        best_match_addr = matched_row.iloc[0][primary]
+                    matched = df_staging[df_staging[col] == to_val]
+                    if not matched.empty:
+                        best_match_addr = matched.iloc[0][primary]
         rows.append({'Source': row[primary], 'Match': best_match_addr, 'Score': best_score})
     return pd.DataFrame(rows)
 
@@ -239,16 +174,12 @@ def match_tfidf(df_live, df_staging, cols):
 # ------------------------------------------
 def match_openai(df_live, df_staging, cols, api_key):
     openai.api_key = api_key
-
     live_texts = df_live[cols].fillna('').agg(' '.join, axis=1).tolist()
     stag_texts = df_staging[cols].fillna('').agg(' '.join, axis=1).tolist()
-
     resp_live = openai.embeddings.create(model="text-embedding-ada-002", input=live_texts)
     live_emb = [d.embedding for d in resp_live.data]
-
     resp_stag = openai.embeddings.create(model="text-embedding-ada-002", input=stag_texts)
     stag_emb = [d.embedding for d in resp_stag.data]
-
     primary = cols[0]
     rows = []
     for idx, vec in enumerate(live_emb):
@@ -265,7 +196,6 @@ def match_openai(df_live, df_staging, cols, api_key):
 def main():
     method, api_key = setup_streamlit_interface()
 
-    # Confidence threshold slider and guide
     threshold_pct = st.slider("Confidence threshold (%)", 0, 100, 90)
     threshold     = threshold_pct / 100.0
     include_low   = st.checkbox("Include URLs below threshold", True)
@@ -277,6 +207,10 @@ def main():
     - **0.85 – 0.94**: Moderate shift, re-evaluation likely by Google  
     - **≤ 0.84**: Major drift, Google may treat it as new  
     """)
+    st.markdown(
+        "*Treat this as a guide; circumstances will vary. "
+        "The more data you use for matching, the more accurate it will be.*"
+    )
 
     col1, col2 = st.columns(2)
     with col1:
@@ -303,7 +237,6 @@ def main():
             avg_score = df_best['Score'].mean()
             med_score = df_best['Score'].median()
             pct_above = (df_best['Score'] >= threshold).mean() * 100
-
             st.markdown("## Mapping Quality Summary")
             m1, m2, m3 = st.columns(3)
             m1.metric("Average Confidence", f"{avg_score:.2%}")
@@ -318,6 +251,10 @@ def main():
             - **0.85 – 0.94**: Moderate shift, re-evaluation likely by Google  
             - **≤ 0.84**: Major drift, Google may treat it as new  
             """)
+            st.markdown(
+                "*Treat this as a guide; circumstances will vary. "
+                "The more data you use for matching, the more accurate it will be.*"
+            )
 
             # Interpretation counts
             total = len(df_best)
@@ -331,11 +268,12 @@ def main():
             c3.metric("0.85–0.94 (Moderate)", f"{cnt85} / {total}")
             c4.metric("≤0.84 (Major drift)",  f"{cnt84} / {total}")
 
-            # Filter based on threshold
+            # Filter and sort by highest score first
             df_show = df_best if include_low else df_best[df_best['Score'] >= threshold]
+            df_show = df_show.sort_values(by='Score', ascending=False).reset_index(drop=True)
 
             # Top Matches table
-            st.markdown(f"### Top Matches ( < {threshold_pct}% highlighted )")
+            st.markdown(f"### Top Matches (highest confidence first, < {threshold_pct}% highlighted)")
             styled = df_show.style.apply(
                 lambda r: ['background-color:#fde2e2' if r['Score'] < threshold else '' for _ in r],
                 axis=1
