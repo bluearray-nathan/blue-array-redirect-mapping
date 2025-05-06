@@ -62,7 +62,7 @@ def setup_streamlit_interface():
         st.markdown("""
         1. **Crawl** both sets of URLs using Screaming Frog (live & target).  
         2. **Export** the *Internal HTML* reports as CSV (`redirect_urls.csv`, `redirect_to_urls.csv`).  
-        3. **If you cannot crawl** (e.g., URLs not yet live or staging unavailable), prepare a CSV with your URLs in a column named **Address** and upload that instead.  
+        3. **If you cannot crawl** (e.g., URLs not yet live or staging unavailable), prepare a CSV with your URLs in a column named **Address**.  
         4. **Upload** under **Redirect data** & **Redirect to data**.  
         5. **Choose** matching method below.  
         6. **Select** your columns, set confidence threshold, then **Map redirects**.  
@@ -75,21 +75,12 @@ def setup_streamlit_interface():
             help="TF-IDF: keyword overlap; Embeddings: semantic similarity via OpenAI"
         )
         if method == "TF-IDF":
-            st.info(
-                "**TF-IDF** is fast, keyword-based matching. "
-                "Works best when URLs/titles share common terms."
-            )
+            st.info("**TF-IDF** is fast, keyword-based matching. Works best when URLs/titles share common terms.")
             api_key = None
         else:
-            st.info(
-                "**Embeddings** use OpenAI’s `text-embedding-ada-002` model "
-                "to capture semantic similarity and synonyms."
-            )
-            api_key = st.text_input(
-                "OpenAI API Key",
-                type="password",
-                help="Required for OpenAI embeddings"
-            )
+            st.info("**Embeddings** use OpenAI’s `text-embedding-ada-002` model to capture semantic similarity.")
+            api_key = st.text_input("OpenAI API Key", type="password",
+                                     help="Required for OpenAI embeddings")
     return method, api_key
 
 # ------------------------------------------
@@ -115,7 +106,7 @@ def preprocess_df(df):
     return df.apply(lambda col: col.str.lower() if col.dtype == 'object' else col)
 
 # ------------------------------------------
-# Column Selection (alphabetical expander)
+# Column Selection
 # ------------------------------------------
 def select_columns_for_matching(df_live, df_staging):
     common = sorted(set(df_live.columns) & set(df_staging.columns))
@@ -123,37 +114,28 @@ def select_columns_for_matching(df_live, df_staging):
     default_addr = next((c for c in common if c.lower() in defaults), common[0])
     with st.expander("Select Columns for Matching", expanded=True):
         st.markdown("Use the search box to filter columns quickly.")
-        addr = st.selectbox(
-            "Primary URL Column",
-            common,
-            index=common.index(default_addr),
-            help="Start typing to search"
-        )
+        addr = st.selectbox("Primary URL Column", common,
+                            index=common.index(default_addr), help="Start typing to search")
         additional = [c for c in common if c != addr]
-        selected = st.multiselect(
-            "Additional Columns (max 2)",
-            additional,
-            max_selections=2,
-            help="Start typing to search"
-        )
+        selected = st.multiselect("Additional Columns (max 2)", additional,
+                                  max_selections=2, help="Start typing to search")
     return addr, selected
 
 # ------------------------------------------
-# TF-IDF Matching
+# Matching Functions
 # ------------------------------------------
 def match_tfidf(df_live, df_staging, cols):
     model = PolyFuzz(TFIDF(min_similarity=0))
     matches = {}
     for col in cols:
-        fl = df_live[col].fillna('').astype(str).tolist()
-        tl = df_staging[col].fillna('').astype(str).tolist()
+        fl = df_live[col].fillna('').tolist()
+        tl = df_staging[col].fillna('').tolist()
         model.match(fl, tl)
         matches[col] = model.get_matches()
     primary = cols[0]
     rows = []
     for _, row in df_live.iterrows():
-        best_score = 0.0
-        best_match_addr = None
+        best_score, best_match = 0, None
         for col in cols:
             mdf = matches[col]
             m = mdf[mdf['From'] == row[col]]
@@ -161,17 +143,14 @@ def match_tfidf(df_live, df_staging, cols):
                 best_score = m.iloc[0]['Similarity']
                 to_val = m.iloc[0]['To']
                 if col == primary:
-                    best_match_addr = to_val
+                    best_match = to_val
                 else:
                     matched = df_staging[df_staging[col] == to_val]
                     if not matched.empty:
-                        best_match_addr = matched.iloc[0][primary]
-        rows.append({'Source': row[primary], 'Match': best_match_addr, 'Score': best_score})
+                        best_match = matched.iloc[0][primary]
+        rows.append({'Source': row[primary], 'Match': best_match, 'Score': best_score})
     return pd.DataFrame(rows)
 
-# ------------------------------------------
-# OpenAI Embeddings Matching
-# ------------------------------------------
 def match_openai(df_live, df_staging, cols, api_key):
     openai.api_key = api_key
     live_texts = df_live[cols].fillna('').agg(' '.join, axis=1).tolist()
@@ -182,12 +161,12 @@ def match_openai(df_live, df_staging, cols, api_key):
     stag_emb = [d.embedding for d in resp_stag.data]
     primary = cols[0]
     rows = []
-    for idx, vec in enumerate(live_emb):
+    for i, vec in enumerate(live_emb):
         sims = cosine_similarity([vec], stag_emb)[0]
-        best_i = int(np.argmax(sims))
-        score  = float(sims[best_i])
-        best_match_addr = df_staging.iloc[best_i][primary] if score > 0 else None
-        rows.append({'Source': df_live.iloc[idx][primary], 'Match': best_match_addr, 'Score': score})
+        idx = int(np.argmax(sims))
+        score = float(sims[idx])
+        match_addr = df_staging.iloc[idx][primary] if score > 0 else None
+        rows.append({'Source': df_live.iloc[i][primary], 'Match': match_addr, 'Score': score})
     return pd.DataFrame(rows)
 
 # ------------------------------------------
@@ -197,96 +176,97 @@ def main():
     method, api_key = setup_streamlit_interface()
 
     threshold_pct = st.slider("Confidence threshold (%)", 0, 100, 90)
-    threshold     = threshold_pct / 100.0
-    include_low   = st.checkbox("Include URLs below threshold", True)
+    threshold = threshold_pct / 100.0
+    include_low = st.checkbox("Include URLs below threshold", True)
 
-    # Consolidated threshold guide table
-    st.markdown("#### Threshold Guide")
-    st.markdown("| Interpretation                            | Embeddings | TF-IDF    |")
-    st.markdown("|-------------------------------------------|------------|-----------|")
-    st.markdown("| No change in meaning                      | 1.00       | 1.00      |")
-    st.markdown("| Minor update, content is still aligned    | 0.95–0.99  | 0.70–0.99 |")
-    st.markdown("| Moderate shift, re-evaluation likely by Google | 0.85–0.94 | 0.50–0.69 |")
-    st.markdown("| Major drift, Google may treat it as new   | ≤ 0.84     | < 0.50    |")
-    st.markdown(
-        "*Treat this as a guide; circumstances will vary. The more data you use for matching, the more accurate it will be.*"
-    )
+    # Show appropriate guide
+    if method == "Embeddings":
+        st.markdown("#### Embeddings Threshold Guide")
+        st.markdown("""
+        - **1.00**: No change in meaning  
+        - **0.95–0.99**: Minor update, content is still aligned  
+        - **0.85–0.94**: Moderate shift, re-evaluation likely by Google  
+        - **≤ 0.84**: Major drift, Google may treat it as new  
+        """)
+    else:
+        st.markdown("#### TF-IDF Threshold Guide")
+        st.markdown("""
+        - **1.00**: No change in meaning  
+        - **0.70–0.99**: Minor update, content is still aligned  
+        - **0.50–0.69**: Moderate shift, re-evaluation likely by Google  
+        - **< 0.50**: Major drift, Google may treat it as new  
+        """)
+    st.markdown("*Treat this as a guide; circumstances will vary. The more data you use for matching, the more accurate it will be.*")
 
-    col1, col2 = st.columns(2)
-    with col1:
-        live_file = create_file_uploader_widget("Redirect data")
-    with col2:
-        stag_file = create_file_uploader_widget("Redirect to data")
+    c1, c2 = st.columns(2)
+    with c1:
+        f_live = create_file_uploader_widget("Redirect data")
+    with c2:
+        f_stag = create_file_uploader_widget("Redirect to data")
 
-    if live_file and stag_file and validate_uploaded(live_file, stag_file):
-        df_live    = preprocess_df(read_file(live_file))
-        df_staging = preprocess_df(read_file(stag_file))
-        addr_col, add_cols = select_columns_for_matching(df_live, df_staging)
-        cols = [addr_col] + add_cols
+    if f_live and f_stag and validate_uploaded(f_live, f_stag):
+        df_live = preprocess_df(read_file(f_live))
+        df_staging = preprocess_df(read_file(f_stag))
+        addr, adds = select_columns_for_matching(df_live, df_staging)
+        cols = [addr] + adds
 
         if st.button("Map redirects"):
             if method == "Embeddings":
                 if not api_key:
-                    st.error("Enter your OpenAI API key to use Embeddings.")
+                    st.error("Enter your OpenAI API key.")
                     return
                 df_best = match_openai(df_live, df_staging, cols, api_key)
             else:
                 df_best = match_tfidf(df_live, df_staging, cols)
 
-            # Mapping Quality Summary
-            avg_score = df_best['Score'].mean()
-            med_score = df_best['Score'].median()
-            pct_above = (df_best['Score'] >= threshold).mean() * 100
+            # Summary metrics
+            avg = df_best['Score'].mean()
+            med = df_best['Score'].median()
+            pct = (df_best['Score'] >= threshold).mean() * 100
             st.markdown("## Mapping Quality Summary")
             m1, m2, m3 = st.columns(3)
-            m1.metric("Average Confidence", f"{avg_score:.2%}")
-            m2.metric("Median Confidence",  f"{med_score:.2%}")
-            m3.metric(f"% ≥ {threshold_pct}%", f"{pct_above:.1f}%")
-
-            # Score Interpretation table
-            st.markdown("## Score Interpretation")
-            st.markdown("| Interpretation                            | Embeddings | TF-IDF    |")
-            st.markdown("|-------------------------------------------|------------|-----------|")
-            st.markdown("| No change in meaning                      | 1.00       | 1.00      |")
-            st.markdown("| Minor update, content is still aligned    | 0.95–0.99  | 0.70–0.99 |")
-            st.markdown("| Moderate shift, re-evaluation likely by Google | 0.85–0.94 | 0.50–0.69 |")
-            st.markdown("| Major drift, Google may treat it as new   | ≤ 0.84     | < 0.50    |")
-            st.markdown(
-                "*Treat this as a guide; circumstances will vary. The more data you use for matching, the more accurate it will be.*"
-            )
+            m1.metric("Avg Confidence", f"{avg:.2%}")
+            m2.metric("Median Confidence", f"{med:.2%}")
+            m3.metric(f"% ≥ {threshold_pct}%", f"{pct:.1f}%")
 
             # Interpretation counts
             total = len(df_best)
-            cnt1   = (df_best['Score'] == 1.0).sum()
-            cnt95  = ((df_best['Score'] >= 0.95) & (df_best['Score'] < 1.0)).sum()
-            cnt85  = ((df_best['Score'] >= 0.85) & (df_best['Score'] < 0.95)).sum()
-            cnt84  = (df_best['Score'] <= 0.84).sum()
-            c1, c2, c3, c4 = st.columns(4)
-            c1.metric("1.00 (No change)", f"{cnt1} / {total}")
-            c2.metric("0.95–0.99 (Minor)",  f"{cnt95} / {total}")
-            c3.metric("0.85–0.94 (Moderate)", f"{cnt85} / {total}")
-            c4.metric("≤0.84 (Major drift)",  f"{cnt84} / {total}")
+            if method == "Embeddings":
+                cnt1 = (df_best['Score'] == 1.0).sum()
+                cnt2 = ((df_best['Score'] >= 0.95) & (df_best['Score'] < 1.0)).sum()
+                cnt3 = ((df_best['Score'] >= 0.85) & (df_best['Score'] < 0.95)).sum()
+                cnt4 = (df_best['Score'] <= 0.84).sum()
+                labels = ["1.00 (No change)", "0.95–0.99 (Minor)", "0.85–0.94 (Moderate)", "≤0.84 (Major)"]
+                counts = [cnt1, cnt2, cnt3, cnt4]
+            else:
+                cnt1 = (df_best['Score'] == 1.0).sum()
+                cnt2 = ((df_best['Score'] >= 0.70) & (df_best['Score'] < 1.0)).sum()
+                cnt3 = ((df_best['Score'] >= 0.50) & (df_best['Score'] < 0.70)).sum()
+                cnt4 = (df_best['Score'] < 0.50).sum()
+                labels = ["1.00 (No change)", "0.70–0.99 (Minor)", "0.50–0.69 (Moderate)", "<0.50 (Major)"]
+                counts = [cnt1, cnt2, cnt3, cnt4]
 
-            # Filter and sort by highest score first
+            st.markdown("## Score Interpretation")
+            for label, count in zip(labels, counts):
+                st.write(f"- **{label}**: {count} / {total}")
+
+            # Filter & sort
             df_show = df_best if include_low else df_best[df_best['Score'] >= threshold]
-            df_show = df_show.sort_values(by='Score', ascending=False).reset_index(drop=True)
+            df_show = df_show.sort_values('Score', ascending=False).reset_index(drop=True)
 
-            # Top Matches table
-            st.markdown(f"### Top Matches (highest confidence first, < {threshold_pct}% highlighted)")
+            # Results
+            st.markdown(f"### Top Matches (highest confidence first, < {threshold_pct}% shaded)")
             styled = df_show.style.apply(
                 lambda r: ['background-color:#fde2e2' if r['Score'] < threshold else '' for _ in r],
                 axis=1
             )
             st.dataframe(styled)
 
-            # Download CSV
+            # CSV download
             csv = df_show.to_csv(index=False)
             b64 = base64.b64encode(csv.encode()).decode()
-            st.markdown(
-                f"<a href='data:text/csv;base64,{b64}' download='mapping.csv'>"
-                "💾 Download CSV</a>",
-                unsafe_allow_html=True
-            )
+            st.markdown(f"<a href='data:text/csv;base64,{b64}' download='mapping.csv'>💾 Download CSV</a>",
+                        unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
