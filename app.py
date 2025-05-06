@@ -111,14 +111,12 @@ def setup_streamlit_interface():
     )
     inject_custom_css()
 
-    # Main title
     st.markdown(
         "<h1 style='color:#002f6c; text-align:center; margin-bottom:10px;'>"
         "Blue Array Redirect Mapping Tool</h1>",
         unsafe_allow_html=True
     )
 
-    # Sidebar instructions & model selection
     with st.sidebar:
         st.markdown("## How to Use")
         st.markdown("""
@@ -277,7 +275,7 @@ def main():
     - **1.00**: No change in meaning  
     - **0.95 – 0.99**: Minor update, content is still aligned  
     - **0.85 – 0.94**: Moderate shift, re-evaluation likely by Google  
-    - **≤ 0.75**: Major drift, Google may treat it as new  
+    - **≤ 0.84**: Major drift, Google may treat it as new  
     """)
 
     col1, col2 = st.columns(2)
@@ -318,7 +316,7 @@ def main():
             - **1.00**: No change in meaning  
             - **0.95 – 0.99**: Minor update, content is still aligned  
             - **0.85 – 0.94**: Moderate shift, re-evaluation likely by Google  
-            - **≤ 0.75**: Major drift, Google may treat it as new
+            - **≤ 0.84**: Major drift, Google may treat it as new  
             """)
 
             # Interpretation counts
@@ -326,12 +324,12 @@ def main():
             cnt1   = (df_best['Score'] == 1.0).sum()
             cnt95  = ((df_best['Score'] >= 0.95) & (df_best['Score'] < 1.0)).sum()
             cnt85  = ((df_best['Score'] >= 0.85) & (df_best['Score'] < 0.95)).sum()
-            cnt75  = (df_best['Score'] <= 0.75).sum()
+            cnt84  = (df_best['Score'] <= 0.84).sum()
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("1.00 (No change)", f"{cnt1} / {total}")
             c2.metric("0.95–0.99 (Minor)",  f"{cnt95} / {total}")
             c3.metric("0.85–0.94 (Moderate)", f"{cnt85} / {total}")
-            c4.metric("≤0.75 (Major drift)",  f"{cnt75} / {total}")
+            c4.metric("≤0.84 (Major drift)",  f"{cnt84} / {total}")
 
             # Filter based on threshold
             df_show = df_best if include_low else df_best[df_best['Score'] >= threshold]
@@ -355,6 +353,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
