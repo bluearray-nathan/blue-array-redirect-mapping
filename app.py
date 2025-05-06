@@ -268,10 +268,21 @@ def match_openai(df_live, df_staging, cols, api_key):
 def main():
     method, api_key = setup_streamlit_interface()
 
+    # Confidence threshold slider and guide
     threshold_pct = st.slider("Confidence threshold (%)", 0, 100, 90)
     threshold     = threshold_pct / 100.0
     include_low   = st.checkbox("Include URLs below threshold", True)
 
+    # New: threshold meaning guide
+    st.markdown("#### Threshold Guide")
+    st.markdown("""
+    - **1.00**: No change in meaning  
+    - **0.95 – 0.99**: Minor update, content is still aligned  
+    - **0.85 – 0.94**: Moderate shift, re-evaluation likely by Google  
+    - **≤ 0.75**: Major drift, Google may treat it as new  
+    """)
+
+    # File upload
     col1, col2 = st.columns(2)
     with col1:
         live_file = create_file_uploader_widget("Redirect data")
@@ -307,11 +318,11 @@ def main():
             # Score interpretation legend
             st.markdown("## Score Interpretation")
             st.markdown("""
-- **1.00**: No change in meaning  
-- **0.95 – 0.99**: Minor update, content is still aligned  
-- **0.85 – 0.94**: Moderate shift, re-evaluation likely by Google  
-- **≤ 0.75**: Major drift, Google may treat it as new
-""")
+            - **1.00**: No change in meaning  
+            - **0.95 – 0.99**: Minor update, content is still aligned  
+            - **0.85 – 0.94**: Moderate shift, re-evaluation likely by Google  
+            - **≤ 0.75**: Major drift, Google may treat it as new
+            """)
 
             # Filter based on threshold
             df_show = df_best if include_low else df_best[df_best['Score'] >= threshold]
