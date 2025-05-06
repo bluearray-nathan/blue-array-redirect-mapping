@@ -137,7 +137,7 @@ def setup_streamlit_interface():
             help="TF-IDF: keyword overlap; Embeddings: semantic similarity via OpenAI"
         )
 
-        # Descriptions
+        # Show description and API key input conditionally
         if method == "TF-IDF":
             st.info(
                 "**TF-IDF** is fast, keyword-based matching. "
@@ -215,7 +215,6 @@ def match_tfidf(df_live, df_staging, cols):
         tl = df_staging[col].fillna('').astype(str).tolist()
         model.match(fl, tl)
         matches[col] = model.get_matches()
-    # pick best per row
     rows = []
     for _, r in df_live.iterrows():
         best = {'Source': r[cols[0]], 'Match': None, 'Score': 0}
@@ -272,7 +271,7 @@ def match_openai(df_live, df_staging, cols, api_key):
 def main():
     method, api_key = setup_streamlit_interface()
 
-    threshold_pct = st.slider("Confidence threshold (%)", 0, 100, 80)
+    threshold_pct = st.slider("Confidence threshold (%)", 0, 100, 90)
     threshold     = threshold_pct / 100.0
     include_low   = st.checkbox("Include URLs below threshold", True)
 
@@ -330,6 +329,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
