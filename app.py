@@ -200,16 +200,16 @@ def main():
     threshold     = threshold_pct / 100.0
     include_low   = st.checkbox("Include URLs below threshold", True)
 
+    # Consolidated threshold guide table
     st.markdown("#### Threshold Guide")
-    st.markdown("""
-    - **1.00**: No change in meaning  
-    - **0.95 – 0.99**: Minor update, content is still aligned  
-    - **0.85 – 0.94**: Moderate shift, re-evaluation likely by Google  
-    - **≤ 0.84**: Major drift, Google may treat it as new  
-    """)
+    st.markdown("| Interpretation                            | Embeddings | TF-IDF    |")
+    st.markdown("|-------------------------------------------|------------|-----------|")
+    st.markdown("| No change in meaning                      | 1.00       | 1.00      |")
+    st.markdown("| Minor update, content is still aligned    | 0.95–0.99  | 0.70–0.99 |")
+    st.markdown("| Moderate shift, re-evaluation likely by Google | 0.85–0.94 | 0.50–0.69 |")
+    st.markdown("| Major drift, Google may treat it as new   | ≤ 0.84     | < 0.50    |")
     st.markdown(
-        "*Treat this as a guide; circumstances will vary. "
-        "The more data you use for matching, the more accurate it will be.*"
+        "*Treat this as a guide; circumstances will vary. The more data you use for matching, the more accurate it will be.*"
     )
 
     col1, col2 = st.columns(2)
@@ -243,17 +243,16 @@ def main():
             m2.metric("Median Confidence",  f"{med_score:.2%}")
             m3.metric(f"% ≥ {threshold_pct}%", f"{pct_above:.1f}%")
 
-            # Score interpretation legend
+            # Score Interpretation table
             st.markdown("## Score Interpretation")
-            st.markdown("""
-            - **1.00**: No change in meaning  
-            - **0.95 – 0.99**: Minor update, content is still aligned  
-            - **0.85 – 0.94**: Moderate shift, re-evaluation likely by Google  
-            - **≤ 0.84**: Major drift, Google may treat it as new  
-            """)
+            st.markdown("| Interpretation                            | Embeddings | TF-IDF    |")
+            st.markdown("|-------------------------------------------|------------|-----------|")
+            st.markdown("| No change in meaning                      | 1.00       | 1.00      |")
+            st.markdown("| Minor update, content is still aligned    | 0.95–0.99  | 0.70–0.99 |")
+            st.markdown("| Moderate shift, re-evaluation likely by Google | 0.85–0.94 | 0.50–0.69 |")
+            st.markdown("| Major drift, Google may treat it as new   | ≤ 0.84     | < 0.50    |")
             st.markdown(
-                "*Treat this as a guide; circumstances will vary. "
-                "The more data you use for matching, the more accurate it will be.*"
+                "*Treat this as a guide; circumstances will vary. The more data you use for matching, the more accurate it will be.*"
             )
 
             # Interpretation counts
