@@ -124,9 +124,10 @@ def setup_streamlit_interface():
         st.markdown("""
         1. **Crawl** both sets of URLs using Screaming Frog (live & target).  
         2. **Export** the *Internal HTML* reports as CSV (`redirect_urls.csv`, `redirect_to_urls.csv`).  
-        3. **Upload** under **Redirect data** & **Redirect to data**.  
-        4. **Choose** matching method below.  
-        5. **Select** your columns, set confidence threshold, then **Map redirects**.  
+        3. **If you cannot crawl** (e.g., URLs not yet live or staging unavailable), prepare a CSV with your URLs in a column named **Address** and upload that instead.  
+        4. **Upload** under **Redirect data** & **Redirect to data**.  
+        5. **Choose** matching method below.  
+        6. **Select** your columns, set confidence threshold, then **Map redirects**.  
         """)
         st.markdown("---")
         st.markdown("## Matching Method")
@@ -329,6 +330,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
