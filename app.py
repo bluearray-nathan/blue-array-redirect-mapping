@@ -138,7 +138,6 @@ def setup_streamlit_interface():
             help="TF-IDF: keyword overlap; Embeddings: semantic similarity via OpenAI"
         )
 
-        # Show description and API key input conditionally
         if method == "TF-IDF":
             st.info(
                 "**TF-IDF** is fast, keyword-based matching. "
@@ -236,11 +235,9 @@ def match_tfidf(df_live, df_staging, cols):
 def match_openai(df_live, df_staging, cols, api_key):
     openai.api_key = api_key
 
-    # combine columns into single text per row
     live_texts = df_live[cols].fillna('').agg(' '.join, axis=1).tolist()
     stag_texts = df_staging[cols].fillna('').agg(' '.join, axis=1).tolist()
 
-    # request embeddings
     resp_live = openai.embeddings.create(
         model="text-embedding-ada-002",
         input=live_texts
@@ -253,7 +250,6 @@ def match_openai(df_live, df_staging, cols, api_key):
     )
     stag_emb = [d.embedding for d in resp_stag.data]
 
-    # compute best matches
     rows = []
     for idx, vec in enumerate(live_emb):
         sims = cosine_similarity([vec], stag_emb)[0]
@@ -307,6 +303,15 @@ def main():
             m1.metric("Average Confidence", f"{avg_score:.2%}")
             m2.metric("Median Confidence",  f"{med_score:.2%}")
             m3.metric(f"% ≥ {threshold_pct}%", f"{pct_above:.1f}%")
+
+            # Score interpretation legend
+            st.markdown("## Score Interpretation")
+            st.markdown("""
+- **1.00**: No change in meaning  
+- **0.95 – 0.99**: Minor update, content is still aligned  
+- **0.85 – 0.94**: Moderate shift, re-evaluation likely by Google  
+- **≤ 0.75**: Major drift, Google may treat it as new
+""")
 
             # Filter based on threshold
             df_show = df_best if include_low else df_best[df_best['Score'] >= threshold]
