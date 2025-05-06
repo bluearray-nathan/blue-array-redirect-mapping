@@ -111,14 +111,12 @@ def setup_streamlit_interface():
     )
     inject_custom_css()
 
-    # Main title
     st.markdown(
         "<h1 style='color:#002f6c; text-align:center; margin-bottom:10px;'>"
         "Blue Array Redirect Mapping Tool</h1>",
         unsafe_allow_html=True
     )
 
-    # Sidebar instructions & model selection
     with st.sidebar:
         st.markdown("## How to Use")
         st.markdown("""
@@ -215,18 +213,31 @@ def match_tfidf(df_live, df_staging, cols):
         tl = df_staging[col].fillna('').astype(str).tolist()
         model.match(fl, tl)
         matches[col] = model.get_matches()
+
+    # build best-match table, always outputting Address as Source and Match
+    primary = cols[0]
     rows = []
-    for _, r in df_live.iterrows():
-        best = {'Source': r[cols[0]], 'Match': None, 'Score': 0}
+    for _, row in df_live.iterrows():
+        best_score = 0.0
+        best_match_addr = None
         for col in cols:
             mdf = matches[col]
-            m = mdf[mdf['From'] == r[col]]
-            if not m.empty and m.iloc[0]['Similarity'] > best['Score']:
-                best.update({
-                    'Match': m.iloc[0]['To'],
-                    'Score': m.iloc[0]['Similarity']
-                })
-        rows.append(best)
+            m = mdf[mdf['From'] == row[col]]
+            if not m.empty and m.iloc[0]['Similarity'] > best_score:
+                best_score = m.iloc[0]['Similarity']
+                to_val = m.iloc[0]['To']
+                if col == primary:
+                    best_match_addr = to_val
+                else:
+                    # lookup the matched row by this column to get its Address
+                    matched_row = df_staging[df_staging[col] == to_val]
+                    if not matched_row.empty:
+                        best_match_addr = matched_row.iloc[0][primary]
+        rows.append({
+            'Source': row[primary],
+            'Match': best_match_addr,
+            'Score': best_score
+        })
     return pd.DataFrame(rows)
 
 # ------------------------------------------
@@ -250,14 +261,16 @@ def match_openai(df_live, df_staging, cols, api_key):
     )
     stag_emb = [d.embedding for d in resp_stag.data]
 
+    primary = cols[0]
     rows = []
     for idx, vec in enumerate(live_emb):
         sims = cosine_similarity([vec], stag_emb)[0]
         best_i = int(np.argmax(sims))
         score  = float(sims[best_i])
+        best_match_addr = df_staging.iloc[best_i][primary] if score > 0 else None
         rows.append({
-            'Source': df_live.iloc[idx][cols[0]],
-            'Match':  df_staging.iloc[best_i][cols[0]] if score > 0 else None,
+            'Source': df_live.iloc[idx][primary],
+            'Match':  best_match_addr,
             'Score':  score
         })
     return pd.DataFrame(rows)
@@ -273,7 +286,6 @@ def main():
     threshold     = threshold_pct / 100.0
     include_low   = st.checkbox("Include URLs below threshold", True)
 
-    # New: threshold meaning guide
     st.markdown("#### Threshold Guide")
     st.markdown("""
     - **1.00**: No change in meaning  
@@ -282,7 +294,6 @@ def main():
     - **≤ 0.75**: Major drift, Google may treat it as new  
     """)
 
-    # File upload
     col1, col2 = st.columns(2)
     with col1:
         live_file = create_file_uploader_widget("Redirect data")
