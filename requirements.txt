@@ -1,10 +1,8 @@
 streamlit
 pandas
 numpy
-matplotlib
-plotly
 polyfuzz
-sentence-transformers
 chardet
-xlsxwriter
-chardet
+openai
+scikit-learn
+
