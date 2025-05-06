@@ -111,12 +111,14 @@ def setup_streamlit_interface():
     )
     inject_custom_css()
 
+    # Main title
     st.markdown(
         "<h1 style='color:#002f6c; text-align:center; margin-bottom:10px;'>"
         "Blue Array Redirect Mapping Tool</h1>",
         unsafe_allow_html=True
     )
 
+    # Sidebar instructions & model selection
     with st.sidebar:
         st.markdown("## How to Use")
         st.markdown("""
@@ -214,7 +216,6 @@ def match_tfidf(df_live, df_staging, cols):
         model.match(fl, tl)
         matches[col] = model.get_matches()
 
-    # build best-match table, always outputting Address as Source and Match
     primary = cols[0]
     rows = []
     for _, row in df_live.iterrows():
@@ -229,15 +230,10 @@ def match_tfidf(df_live, df_staging, cols):
                 if col == primary:
                     best_match_addr = to_val
                 else:
-                    # lookup the matched row by this column to get its Address
                     matched_row = df_staging[df_staging[col] == to_val]
                     if not matched_row.empty:
                         best_match_addr = matched_row.iloc[0][primary]
-        rows.append({
-            'Source': row[primary],
-            'Match': best_match_addr,
-            'Score': best_score
-        })
+        rows.append({'Source': row[primary], 'Match': best_match_addr, 'Score': best_score})
     return pd.DataFrame(rows)
 
 # ------------------------------------------
@@ -249,16 +245,10 @@ def match_openai(df_live, df_staging, cols, api_key):
     live_texts = df_live[cols].fillna('').agg(' '.join, axis=1).tolist()
     stag_texts = df_staging[cols].fillna('').agg(' '.join, axis=1).tolist()
 
-    resp_live = openai.embeddings.create(
-        model="text-embedding-ada-002",
-        input=live_texts
-    )
+    resp_live = openai.embeddings.create(model="text-embedding-ada-002", input=live_texts)
     live_emb = [d.embedding for d in resp_live.data]
 
-    resp_stag = openai.embeddings.create(
-        model="text-embedding-ada-002",
-        input=stag_texts
-    )
+    resp_stag = openai.embeddings.create(model="text-embedding-ada-002", input=stag_texts)
     stag_emb = [d.embedding for d in resp_stag.data]
 
     primary = cols[0]
@@ -268,11 +258,7 @@ def match_openai(df_live, df_staging, cols, api_key):
         best_i = int(np.argmax(sims))
         score  = float(sims[best_i])
         best_match_addr = df_staging.iloc[best_i][primary] if score > 0 else None
-        rows.append({
-            'Source': df_live.iloc[idx][primary],
-            'Match':  best_match_addr,
-            'Score':  score
-        })
+        rows.append({'Source': df_live.iloc[idx][primary], 'Match': best_match_addr, 'Score': score})
     return pd.DataFrame(rows)
 
 # ------------------------------------------
@@ -335,6 +321,18 @@ def main():
             - **≤ 0.75**: Major drift, Google may treat it as new
             """)
 
+            # Interpretation counts
+            total = len(df_best)
+            cnt1   = (df_best['Score'] == 1.0).sum()
+            cnt95  = ((df_best['Score'] >= 0.95) & (df_best['Score'] < 1.0)).sum()
+            cnt85  = ((df_best['Score'] >= 0.85) & (df_best['Score'] < 0.95)).sum()
+            cnt75  = (df_best['Score'] <= 0.75).sum()
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("1.00 (No change)", f"{cnt1} / {total}")
+            c2.metric("0.95–0.99 (Minor)",  f"{cnt95} / {total}")
+            c3.metric("0.85–0.94 (Moderate)", f"{cnt85} / {total}")
+            c4.metric("≤0.75 (Major drift)",  f"{cnt75} / {total}")
+
             # Filter based on threshold
             df_show = df_best if include_low else df_best[df_best['Score'] >= threshold]
 
@@ -357,6 +355,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
