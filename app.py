@@ -62,7 +62,7 @@ def setup_streamlit_interface():
         st.markdown("""
         1. **Crawl** both sets of URLs using Screaming Frog (live & target).  
         2. **Export** the *Internal HTML* reports as CSV (`redirect_urls.csv`, `redirect_to_urls.csv`).  
-        3. **If you cannot crawl** (e.g., URLs not yet live or staging unavailable), prepare a CSV with your URLs in a column named **Address**.  
+        3. **If you cannot crawl**, prepare a CSV with your URLs in a column named **Address**.  
         4. **Upload** under **Redirect data** & **Redirect to data**.  
         5. **Choose** matching method below.  
         6. **Select** your columns, set confidence threshold, then **Map redirects**.  
@@ -100,7 +100,9 @@ def validate_uploaded(f1, f2):
 # ------------------------------------------
 def read_file(f):
     enc = chardet.detect(f.getvalue())['encoding']
-    return pd.read_csv(f, dtype="str", encoding=enc, on_bad_lines='skip')
+    df = pd.read_csv(f, dtype="str", encoding=enc, on_bad_lines='skip')
+    df.columns = df.columns.str.strip()
+    return df
 
 def preprocess_df(df):
     return df.apply(lambda col: col.str.lower() if col.dtype == 'object' else col)
@@ -110,12 +112,15 @@ def preprocess_df(df):
 # ------------------------------------------
 def select_columns_for_matching(df_live, df_staging):
     common = sorted(set(df_live.columns) & set(df_staging.columns))
+    if not common:
+        st.error("🚨 No matching columns found—ensure both files share at least one header (e.g. 'Address').")
+        st.stop()
     defaults = ['address', 'url', 'link']
     default_addr = next((c for c in common if c.lower() in defaults), common[0])
     with st.expander("Select Columns for Matching", expanded=True):
         st.markdown("Use the search box to filter columns quickly.")
-        addr = st.selectbox("Primary URL Column", common,
-                            index=common.index(default_addr), help="Start typing to search")
+        addr = st.selectbox("Primary URL Column", common, index=common.index(default_addr),
+                            help="Start typing to search")
         additional = [c for c in common if c != addr]
         selected = st.multiselect("Additional Columns (max 2)", additional,
                                   max_selections=2, help="Start typing to search")
@@ -205,19 +210,25 @@ def main():
         f_stag = create_file_uploader_widget("Redirect to data")
 
     if f_live and f_stag and validate_uploaded(f_live, f_stag):
-        df_live = preprocess_df(read_file(f_live))
-        df_staging = preprocess_df(read_file(f_stag))
-        addr, adds = select_columns_for_matching(df_live, df_staging)
-        cols = [addr] + adds
+        try:
+            with st.spinner("Reading & preprocessing files..."):
+                df_live = preprocess_df(read_file(f_live))
+                df_staging = preprocess_df(read_file(f_stag))
 
-        if st.button("Map redirects"):
-            if method == "Embeddings":
-                if not api_key:
-                    st.error("Enter your OpenAI API key.")
-                    return
-                df_best = match_openai(df_live, df_staging, cols, api_key)
-            else:
-                df_best = match_tfidf(df_live, df_staging, cols)
+            with st.spinner("Selecting columns..."):
+                addr, adds = select_columns_for_matching(df_live, df_staging)
+                cols = [addr] + adds
+
+            with st.spinner("Mapping redirects..."):
+                if method == "Embeddings":
+                    if not api_key:
+                        st.error("Enter your OpenAI API key.")
+                        return
+                    df_best = match_openai(df_live, df_staging, cols, api_key)
+                else:
+                    df_best = match_tfidf(df_live, df_staging, cols)
+
+            st.success("✅ Mapping complete!")
 
             # Summary metrics
             avg = df_best['Score'].mean()
@@ -229,26 +240,27 @@ def main():
             m2.metric("Median Confidence", f"{med:.2%}")
             m3.metric(f"% ≥ {threshold_pct}%", f"{pct:.1f}%")
 
-            # Interpretation counts
+            # Score Interpretation
             total = len(df_best)
             if method == "Embeddings":
-                cnt1 = (df_best['Score'] == 1.0).sum()
-                cnt2 = ((df_best['Score'] >= 0.95) & (df_best['Score'] < 1.0)).sum()
-                cnt3 = ((df_best['Score'] >= 0.85) & (df_best['Score'] < 0.95)).sum()
-                cnt4 = (df_best['Score'] <= 0.84).sum()
                 labels = ["1.00 (No change)", "0.95–0.99 (Minor)", "0.85–0.94 (Moderate)", "≤0.84 (Major)"]
-                counts = [cnt1, cnt2, cnt3, cnt4]
+                counts = [
+                    (df_best['Score'] == 1.0).sum(),
+                    ((df_best['Score'] >= 0.95) & (df_best['Score'] < 1.0)).sum(),
+                    ((df_best['Score'] >= 0.85) & (df_best['Score'] < 0.95)).sum(),
+                    (df_best['Score'] <= 0.84).sum()
+                ]
             else:
-                cnt1 = (df_best['Score'] == 1.0).sum()
-                cnt2 = ((df_best['Score'] >= 0.70) & (df_best['Score'] < 1.0)).sum()
-                cnt3 = ((df_best['Score'] >= 0.50) & (df_best['Score'] < 0.70)).sum()
-                cnt4 = (df_best['Score'] < 0.50).sum()
                 labels = ["1.00 (No change)", "0.70–0.99 (Minor)", "0.50–0.69 (Moderate)", "<0.50 (Major)"]
-                counts = [cnt1, cnt2, cnt3, cnt4]
-
+                counts = [
+                    (df_best['Score'] == 1.0).sum(),
+                    ((df_best['Score'] >= 0.70) & (df_best['Score'] < 1.0)).sum(),
+                    ((df_best['Score'] >= 0.50) & (df_best['Score'] < 0.70)).sum(),
+                    (df_best['Score'] < 0.50).sum()
+                ]
             st.markdown("## Score Interpretation")
-            for label, count in zip(labels, counts):
-                st.write(f"- **{label}**: {count} / {total}")
+            for lbl, cnt in zip(labels, counts):
+                st.write(f"- **{lbl}**: {cnt} / {total}")
 
             # Filter & sort
             df_show = df_best if include_low else df_best[df_best['Score'] >= threshold]
@@ -262,14 +274,18 @@ def main():
             )
             st.dataframe(styled)
 
-            # CSV download
+            # Download CSV
             csv = df_show.to_csv(index=False)
             b64 = base64.b64encode(csv.encode()).decode()
             st.markdown(f"<a href='data:text/csv;base64,{b64}' download='mapping.csv'>💾 Download CSV</a>",
                         unsafe_allow_html=True)
 
+        except Exception as e:
+            st.error(f"❗ An error occurred: {e}")
+
 if __name__ == "__main__":
     main()
+
 
 
 
